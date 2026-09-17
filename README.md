@@ -14,6 +14,7 @@ Node.js + TypeScript (modo `strict`) + Express + Zod. Sin base de datos: los pas
 
 ## Índice
 
+- [Metodología de trabajo](#metodología-de-trabajo)
 - [Diagrama del pipeline](#diagrama-del-pipeline)
 - [Requisitos](#requisitos)
 - [Instalación y ejecución](#instalación-y-ejecución)
@@ -28,6 +29,20 @@ Node.js + TypeScript (modo `strict`) + Express + Zod. Sin base de datos: los pas
 - [Colección de Postman](#colección-de-postman)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Documentación adicional](#documentación-adicional)
+
+## Metodología de trabajo
+
+El proyecto se construyó con Claude Code, en dos etapas con un modelo distinto en cada una:
+
+1. **Planificación (Plan Mode) — Claude Opus 5, razonamiento *High*.** A partir de la letra del ejercicio se diseñó el plan completo de implementación (`IMPLEMENTATION_PLAN.md`, 41 tickets agrupados en fases, con dependencias, criterios de aceptación y una tabla de "olas" de paralelización) y la plantilla de decisiones de diseño (`DESIGN_DECISIONS.md`).
+2. **Implementación — Claude Sonnet 5, razonamiento *High*.** Se ejecutó el plan ticket por ticket, verificando build/lint/tests y completando las notas de implementación de cada uno a medida que se cerraba.
+
+**Cambio de ritmo durante la implementación:** procesar los 41 tickets uno por uno, con una pausa y verificación completa después de cada uno, resultó demasiado lento. A partir de `TICKET-13` (ya con `TICKET-01`–`TICKET-12` cerrados) se tomaron dos decisiones para acelerar sin resignar calidad, documentadas en detalle en la **"Nota de replanificación"** dentro de `IMPLEMENTATION_PLAN.md` (justo antes de la Fase 3):
+
+- **Tests solo donde importan.** De ahí en más, solo llevan suite unitaria dedicada el núcleo del pipeline (los 7 filtros, el runner, `PipelineFactory`, `ReservationContextLoader`) y el soporte del filtro de tipo de cambio (cache, retry, provider HTTP, servicio) — porque ahí vive la lógica de negocio y porque la letra pide casos concretos de timeout/retry/cache/fallback. El resto del código (schemas, mappers, stores, servicios de aplicación, capa HTTP completa) se implementó sin tests unitarios propios, verificado con `build`+`lint` y cubierto igualmente por los 16 tests de integración obligatorios de la letra (que ejercitan la app HTTP completa de punta a punta).
+- **Trabajo por sesiones, no ticket por ticket.** Los tickets restantes (`TICKET-13` a `TICKET-41`) se agruparon en **7 sesiones de trabajo** (filtros de validación · filtros de precio · integración de tipo de cambio · ensamblado + capa de aplicación · capa HTTP · tests de integración de la letra · entregables finales). Cada ticket individual se sigue marcando `[x]` con sus notas propias para mantener la trazabilidad, pero se implementa y verifica en bloque por sesión en vez de pausar después de cada uno. El detalle completo de qué tickets entran en cada sesión está en esa misma nota de `IMPLEMENTATION_PLAN.md`.
+
+Además, después de cerrar la Sesión 6 se corrió una revisión de código (`code-review`, multi-agente) sobre todo lo implementado hasta ese punto, que encontró y permitió corregir un bug real antes de seguir (ver la nota de TICKET-37 y la sección "Retry, timeout y cache" de `DESIGN_DECISIONS.md`).
 
 ## Diagrama del pipeline
 
