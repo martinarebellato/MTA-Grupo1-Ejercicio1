@@ -259,6 +259,18 @@ total = subtotal + taxes + fuel + airportFee
     - El merge no muta la base y permite actualizar un solo campo anidado.
   - **Notas de implementación:** `PartialPipelineConfig` se definió a mano en `src/config/pipelineConfig.ts` (no inferido de Zod) para que `config` no dependa de `http`; el schema Zod en `src/http/schemas/pipelineConfig.schema.ts` es estructuralmente compatible por duck typing. Cada sub-schema usa `.strict()` para rechazar claves desconocidas tanto a nivel raíz como anidado. `fallbackRates` por defecto: `{ ARS: 1000, BRL: 5.4, EUR: 0.92, CLP: 950, UYU: 40, MXN: 18 }` (valores placeholder razonables, documentados como tales; no son tasas de mercado reales) — **sin JPY** a propósito, ya que `JL005` (TICKET-08) depende de esa ausencia para ejercitar el caso `fallback-usd`. `retryDelayMs` por defecto es 100 ms (backoff corto, D10); los tests de servicios que dependan de reintentos deberán usar `delayMs: 0` vía override. `mergePipelineConfig` hace merge profundo únicamente en los campos que son `Record` anidados (`fallbackRates`, `classMultipliers`, `tierDiscounts`, `discounts`); el resto de los campos de cada sub-config se sobreescribe con spread simple. **Hallazgo de entorno:** al agregar Zod, la suite de Jest empezó a crashear por falta de memoria incluso con `maxWorkers: 1` (`JavaScript heap out of memory`). Se resolvió invocando Jest directamente vía `node --max-old-space-size=4096 node_modules/jest/bin/jest.js` en los scripts `test`, `test:watch` y `test:coverage` de `package.json` (más robusto entre shells que `NODE_OPTIONS` con sintaxis distinta en bash/PowerShell/cmd). Cobertura actual: 98.48% statements / 92.3% branches sobre `src/` (los `defaultPipelineConfig`, `pipelineConfig` y `pipelineConfig.schema` quedaron en 100%).
 
+> ## 🗂️ A partir de acá: ejecución por sesiones
+>
+> Los tickets 01–12 de arriba se hicieron **uno por uno**, con pausa y verificación completa (build/lint/test + notas) después de cada uno, esperando confirmación antes de seguir con el siguiente.
+>
+> **A partir de TICKET-13, el ritmo cambió.** Se agrupó todo el trabajo restante (TICKET-13 a TICKET-41) en **7 sesiones**, cada una implementada y verificada **en bloque** (sin pausar ticket por ticket dentro de la misma sesión). El detalle completo de esta decisión — motivo, alcance de tests reducido, tabla de qué ticket va en qué sesión — está en la **["Nota de replanificación"](#nota-de-replanificación-2026-09-17)** más arriba, antes de "Fase 0". Cada bloque de sesión abajo tiene un marcador como este:
+>
+> > **🔷 Sesión N** — TICKET-X, Y, Z.
+>
+> para que sea visible al recorrer el archivo dónde empieza cada una.
+
+> **🔷 Sesión 1** — TICKET-13, 14, 15 · `ReservationContextLoader` + filtros de validación (Pasajero, Vuelo).
+
 - [x] TICKET-13 — `ReservationContextLoader` (fuente del pipeline)
   - **Objetivo:** cargar pasajero y vuelo en el contexto inicial (D8).
   - **Descripción:** clase que recibe `PassengerRepository` y `FlightRepository` y expone `load(reservation): Promise<ReservationContext>`: busca ambas entidades y crea el contexto con `passenger`/`flight` en `null` si no existen. No valida ni agrega issues.
@@ -300,6 +312,8 @@ total = subtotal + taxes + fuel + airportFee
   - **Notas de implementación:** [Sesión 1] Mismo patrón que F1: si `flight` es `null` retorna con `FLIGHT_NOT_FOUND` de inmediato; si no, acumula `NO_SEATS_AVAILABLE` / `ORIGIN_MISMATCH` / `DESTINATION_MISMATCH` / `FLIGHT_DEPARTED` (comparación `<=` contra `now`, así "igual a ahora" también es error, tal como pide el criterio de aceptación). Comparación de IATA con `.toUpperCase()` en ambos lados.
 
 ## Fase 4 — Filtros de precio (paralelizables)
+
+> **🔷 Sesión 2** — TICKET-16, 17, 18, 19 · Filtros de precio (Base, Lealtad, Tipo de pasajero, Impuestos).
 
 - [x] TICKET-16 — Filtro 4: Cálculo de Precio Base
   - **Objetivo:** precio según clase de asiento.
@@ -344,6 +358,8 @@ total = subtotal + taxes + fuel + airportFee
   - **Notas de implementación:** [Sesión 2] `taxableBaseUSD = ctx.pricing.subtotalUSD ?? currentPriceUSD` (fallback pedido explícitamente por el ticket). `fuelSurchargeUSD` siempre se calcula sobre `classBasePriceUSD` (no sobre el subtotal), independientemente de qué filtros de descuento estén habilitados. Se verificaron ambos casos numéricos de la letra (P2 y P3) más un tercer test con F5/F6 deshabilitados (solo `currentPriceUSD`, sin `subtotalUSD`) que reproduce P1 (265.00).
 
 ## Fase 5 — Integración con API de tipo de cambio
+
+> **🔷 Sesión 3** — TICKET-20, 21, 22, 23, 24 · Integración con la API de tipo de cambio (cache, retry, provider HTTP, servicio, filtro F3).
 
 - [x] TICKET-20 — Cache de tasas con TTL (`RateCache`)
   - **Objetivo:** cache en memoria de 1 hora con invalidación manual.
@@ -410,6 +426,8 @@ total = subtotal + taxes + fuel + airportFee
   - **Notas de implementación:** [Sesión 3] Fin de la Sesión 3. `convertedPrice = originalPrice × rate` calculado directamente en el filtro (no en el servicio, que solo devuelve la tasa). El warning `EXCHANGE_RATE_FALLBACK` incluye la razón de fallo (`failureReason`) cuando está disponible. El precondition guard (`requireFlight` + `requireFiniteNonNegative`) puede lanzar `CorruptContextError`, que el `Pipeline` (TICKET-11) traduce a `FAILED`/`CORRUPT_CONTEXT` — coherente con el resto de los filtros.
 
 ## Fase 6 — Ensamblado y servicios de aplicación
+
+> **🔷 Sesión 4** — TICKET-25, 26, 27, 28, 29, 30 · Ensamblado del pipeline (`PipelineFactory`) + capa de aplicación (schema, mapper, stores, config service, processing service).
 
 - [x] TICKET-25 — `PipelineFactory`
   - **Objetivo:** único lugar que define el orden fijo de los filtros y los construye desde la config (D11).
@@ -479,6 +497,8 @@ total = subtotal + taxes + fuel + airportFee
 
 ## Fase 7 — Capa HTTP
 
+> **🔷 Sesión 5** — TICKET-31, 32, 33, 34, 35 · Capa HTTP (Express, composition root, endpoints de reservas/config/cache).
+
 - [x] TICKET-31 — Esqueleto Express y manejo centralizado de errores
   - **Objetivo:** app testeable con formato de error uniforme.
   - **Descripción:** `createApp(deps)` en `app.ts` (JSON body parser con límite, routers inyectados, sin `listen`); `server.ts` con `listen`. `AppError` (+ `ValidationError` 400, `NotFoundError` 404). Middleware `errorHandler` → `{ error: { code, message, details? } }`, incluido el JSON inválido en el body (400) y los errores inesperados (500, logueados). Middleware `notFound` (404).
@@ -534,6 +554,8 @@ total = subtotal + taxes + fuel + airportFee
 
 ## Fase 8 — Tests de integración de los casos de la letra
 
+> **🔷 Sesión 6** — TICKET-36, 37 · Tests de integración de los 16 casos de la letra (entregable obligatorio).
+
 - [x] TICKET-36 — Integración: flujo básico y cálculo de precios
   - **Objetivo:** cubrir end-to-end (HTTP → pipeline → respuesta) los casos B1–B4 y P1–P4 con los mocks reales y el provider fake.
   - **Descripción:** suite con supertest y `FakeClock` fijo. Los valores esperados salen de la fórmula y los fixtures de TICKET-07/08.
@@ -573,6 +595,8 @@ total = subtotal + taxes + fuel + airportFee
     - R1 se simula con un método nuevo `FakeExchangeRateProvider.alwaysTimeout()` que rechaza después de `options.timeoutMs` con un `DOMException('TimeoutError')`, igual que produciría `AbortSignal.timeout()` en el provider real, pero sin pasar por red ni por timeouts reales de 5 s (se usa `timeoutMs: 20` vía el override de config del request). R2 usa un fake que solo lanza para la moneda `ARS` (no para todas), así se puede demostrar que la reserva con destino US en el mismo lote sigue `COMPLETED`. Suite corrida 3 veces seguidas sin flakiness.
 
 ## Fase 9 — Entregables y cierre
+
+> **🔷 Sesión 7** — TICKET-38, 39, 40, 41 · Entregables finales (Postman, README, revisión de `DESIGN_DECISIONS.md`, control final). Entre la Sesión 6 y la 7 se corrió además una revisión de código (`code-review`, multi-agente) sobre todo lo implementado hasta ese punto, que encontró y permitió corregir un bug real (ver nota de TICKET-37/TICKET-20/23) antes de armar los entregables.
 
 - [x] TICKET-38 — Colección de Postman
   - **Objetivo:** entregable 3: requests **y responses** de ejemplo.
