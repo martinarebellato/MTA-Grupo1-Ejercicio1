@@ -76,7 +76,7 @@ total = subtotal + taxes + fuel + airportFee
 
 ## Fase 0 — Base del proyecto
 
-- [ ] TICKET-01 — Scaffolding del proyecto TypeScript + Express
+- [x] TICKET-01 — Scaffolding del proyecto TypeScript + Express
   - **Objetivo:** tener un proyecto Node.js/TypeScript compilable con la estructura de carpetas acordada.
   - **Descripción:** `npm init`; instalar `express`, `zod` y dev-deps `typescript`, `tsx`, `@types/node`, `@types/express`. `tsconfig.json` con `strict: true`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `exactOptionalPropertyTypes` (si no complica), `outDir: dist`, incluyendo `src/` y `data/`. `tsconfig.build.json` que excluya tests. Scripts `build`, `dev` (tsx watch), `start`. `.gitignore` (node_modules, dist, coverage, .env). `src/config/env.ts` que lee `PORT` (default 3000), `EXCHANGE_API_BASE_URL` (default `https://api.exchangerate-api.com/v4/latest`) y `LOG_LEVEL`. `.env.example`. Carpetas vacías con `.gitkeep`: `src/{config,domain,pipeline,filters,repositories,services/exchange,http/{routes,controllers,schemas,middleware},shared}`, `data/`, `tests/{unit,integration,helpers}`, `postman/`.
   - **Archivos:** `package.json`, `tsconfig.json`, `tsconfig.build.json`, `.gitignore`, `.env.example`, `src/config/env.ts`.
@@ -85,7 +85,7 @@ total = subtotal + taxes + fuel + airportFee
     - `npm install` y `npm run build` terminan sin errores.
     - La estructura de carpetas coincide con la acordada.
     - `env.ts` exporta un objeto tipado con defaults.
-  - **Notas de implementación:** _(completar al cerrar)_
+  - **Notas de implementación:** Proyecto inicializado con `express` y `zod` como dependencias, y `typescript`/`tsx`/`@types/node`/`@types/express` como dev-deps. `tsconfig.json` con `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` y `exactOptionalPropertyTypes` habilitados (no generó conflictos). `tsconfig.build.json` extiende el base excluyendo `tests/**` y archivos `*.test.ts`/`*.spec.ts`. `env.ts` exporta `Env` tipado (`PORT: number`, `EXCHANGE_API_BASE_URL: string`, `LOG_LEVEL: string`) con parseo seguro de `PORT` (fallback a 3000 si no es un número finito positivo) y defaults acordados. Se creó la estructura completa de carpetas con `.gitkeep`. `npm install` y `npm run build` corren sin errores; `dist/` se genera correctamente. Aún no se agregó `jest`/`eslint` (corresponde a TICKET-02), por lo que `npm test`/`npm run lint` no se ejecutan todavía en este ticket.
 
 - [ ] TICKET-02 — Configuración de testing y linting
   - **Objetivo:** poder escribir y correr tests unitarios y de integración y mantener calidad de código.
